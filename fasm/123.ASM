@@ -1,68 +1,72 @@
-format   PE64
-include  'win64a.inc'
-include  'INCLUDE\MACRO\IF.INC'
+format PE console 5.0
+include 'win32ax.inc'
+include 'INCLUDE\MACRO\IF.INC'
 entry    start
 
 section '.data' data readable writeable
-;------
+        FP            dd      ?
+        mode          db      'rb',0
+        fName         db      'C:\Users\admin\Desktop\peAnalyzerSoft\peFIles\run_pe64.exe',0
+        tpt           db      '0x%0X ',0
+        buf           dd      ?
+        hOut          dd      ?
 
-fName     db  'C:\Users\admin\Desktop\peAnalyzerSoft\peFIles\run_pe64.exe',0        ; имя файла
-buff      dd  ?                                                                        ; текст для записи
-hOut      dd  ?                                                                        ; дескриптор вывода
-hFile     dd  ?                                                                        ; дескриптор файла
-PeSig     dd  ?                                                                        ; начало pe сигнатуры
+        e_magic       dd      ?       ;обязательная сигнатура pe файла
+        e_lfanew      dd      ?       ;начало pe заголвока
+        crlf    =   $ - 1
+        hello         db 'Hello world!', 10, 0
 
 section '.text' code readable executable
-;------
-start:  invoke GetStdHandle,STD_OUTPUT_HANDLE                                                           ;получаем дескриптор вывода в консоль
+start:
+    invoke GetStdHandle,STD_OUTPUT_HANDLE                                                           ;???????? ?????????? ?????? ? ???????
         mov [hOut],eax
 
-        invoke  CreateFileA,fName,GENERIC_READ,0,0,OPEN_EXISTING,FILE_ATTRIBUTE_ARCHIVE,0               ;открываем файл
-        mov     [hFile],eax                                                                             ;запомним его дескриптор
-        cmp eax, INVALID_HANDLE_VALUE                                                                   ;проверяем дескриптор на валидность
-            je errorExit
+    invoke  fopen,fName, mode ;O_RDONLY or O_BINARY
+    mov [FP], eax
 
-        invoke ReadFile,[hFile],buff,2,0,0                                                              ;считываем первый 2а байта(e_magic)
-        cmp [buff],5a4dh                                                                                ;если !=mz, то notPe
-            jne notPe
+    ;--------------------------DOS HEADER
+    invoke WriteConsoleA,[hOut],"[DOS Header]",12,0,0
+    cinvoke puts,crlf
+    invoke  fread,  e_magic, 1,2, [FP]                                                  ;считываем 1е 2а байта(e_magic)
+    cmp [e_magic], 5a4dh                                                                ;проверка, точно ли это pe file?
+        jne notPe
+    invoke WriteConsoleA,[hOut],"       e_magic - ",17,0,0
+    invoke printf,tpt,[e_magic]
 
-        invoke SetFilePointer,[hFile],3ch,0,FILE_BEGIN                                                  ;получаем метку начала pe заголовка (e_lfanew)
-        invoke ReadFile,[hFile],buff,4,0,0
-        ;invoke WriteConsoleA,[hOut],buff,5,0,0
+    cinvoke fseek,[FP],3ch,0                                                            ;ставим метку туда, где находится e_lfanew(указывает на начало pe секции)
+    invoke fread,e_lfanew,1,4,[FP]                                                      ;читаем эти 4 байта
+    cinvoke puts,crlf
+    invoke WriteConsoleA,[hOut],"       e_lfanew - ",19,0,0
+    invoke printf,tpt,[e_lfanew]
 
-        mov eax,[buff]                                                                                  ;начало pe сигнатуры и проверка,что это pe file
-        mov [PeSig],eax
-        invoke SetFilePointer, [hFile],[PeSig],0,FILE_BEGIN
-        invoke ReadFile,[hFile],PeSig,4,0,0
-        invoke WriteConsoleA,[hOut],PeSig,5,0,0
-        cmp [PeSig],4550h
-            jne notPe
+    cinvoke fseek,[FP],[e_lfanew],0                                                     ;ставим метку на начало pe секции
+    invoke fread,buf,1,4,[FP]                                                           ;читаем эти 4 байта
+    cmp [buf],4550h                                                                     ;если они = 4550h, то ок, это pe file. ещё одна проверка
+    cinvoke puts,crlf
+    invoke printf,tpt,[buf]
 
 
-        ;.if [buff] = 5a4dh  ;
-         ; invoke WriteConsoleA,[hOut],"pe",10,10,0
-          ;invoke Sleep,5000
-       ; .else
-        ;   invoke WriteConsoleA,[hOut],"not pe",10,10,0
-         ;  invoke Sleep,5000
-       ; .endif
-        invoke Sleep,5000
-       ; invoke ExitProcess,0
+notPe:
 
-errorExit: invoke WriteConsoleA,[hOut],"Error Exit",10,10,0
-           invoke Sleep,5000
-notPe:     invoke WriteConsoleA,[hOut],"not pe",6,0,0
-           invoke Sleep,5000
-;пппппппппппппппппппппппппппппппппппп
+    invoke _getch
+    invoke  exit, 0
+; import data in the same section
 section '.idata' import data readable
-
-  library kernel, 'KERNEL32.DLL'
-
-  import  kernel,\                     ; API для импорта из кернел32.
-             CreateFileA,'CreateFileA',\
-             ReadFile,'ReadFile',\
-             Sleep,'Sleep',\
-             ExitProcess,'ExitProcess',\
-             GetStdHandle,'GetStdHandle',\
-             WriteConsoleA,'WriteConsoleA',\
-             SetFilePointer,'SetFilePointer'
+ library kernel,'KERNEL32.DLL',\
+    msvcrt,'MSVCRT.DLL'
+ 
+ import kernel,\
+    GetStdHandle,'GetStdHandle',\
+    WriteConsoleA,'WriteConsoleA'
+ 
+ import msvcrt,\
+    _getch,'_getch',\
+    printf,'printf',\
+    puts,'puts',\
+    ferror,'ferror',\
+    fclose,'fclose',\
+    fread,'fread',\
+    fopen,'fopen',\
+    ftell,'ftell',\
+    exit,'exit',\
+    fseek,'fseek'
