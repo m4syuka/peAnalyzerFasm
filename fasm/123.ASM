@@ -13,17 +13,30 @@ section '.data' data readable writeable
         crlf    =   $ - 1
 
         ;DOS HEADER
-        e_magic       dd      ?       ;обязательная сигнатура pe файла
-        e_lfanew      dd      ?       ;начало pe заголвока
+        e_magic               dd      ?       ;обязательная сигнатура pe файла
+        e_lfanew              dd      ?       ;начало pe заголвока
 
         ;PE HEADER
-        signature     dd      ?
+        signature             dd      ?
 
         ;FILE HEADER
         machine               dd      ?
-        numsection            dd      ?
-        sizeopthead           dd      ?
+        numsection            dd      ?         ;NumberOfSections
+        sizeopthead           dd      ?         ;SizeOfOptionalHeader
         characteristic        dd      ?
+
+        ;OPTIONAL HEADER
+        magic                 dd      ?
+        addressEntPnt         dd      ?         ;addressOfEntryPoint
+        imageBase             dd      ?         ;
+        imageBaseHalf         dd      ?
+        sectionAlignm         dd      ?         ;SectionsAlignment
+        fileAlignm            dd      ?         ;FileAlignment
+        majorSybVersion       dd      ?         ;MajorSubsystemVersion
+        sizeImage             dd      ?         ;sizeOfUmage
+        sizeHeader            dd      ?         ;sizeOfHeader
+        subSystem             dd      ?
+        numberOfRvaAndSizes   dd      ?
 
 section '.text' code readable executable
 start:
@@ -63,30 +76,106 @@ start:
     ;--------------------------FILE HEADER
     cinvoke puts,crlf
     cinvoke puts,crlf
-    invoke WriteConsoleA,[hOut],"       [FILE HEADER]",20,0,0
+    invoke WriteConsoleA,[hOut],"[FILE HEADER]",13,0,0
 
     invoke fread,machine,1,2,[FP]
     cinvoke puts,crlf
-    invoke  WriteConsoleA,[hOut],"              Machine - ",24,0,0
+    invoke  WriteConsoleA,[hOut],"       Machine - ",17,0,0
     cinvoke printf,tpt,[machine]
 
     invoke fread,numsection,1,2,[FP]
     cinvoke puts,crlf
-    invoke  WriteConsoleA,[hOut],"              NumberOfSections - ",33,0,0
+    invoke  WriteConsoleA,[hOut],"       NumberOfSections - ",26,0,0
     cinvoke printf,tpt,[numsection]
 
     cinvoke fseek,[FP],12,1
     invoke fread,sizeopthead,1,2,[FP]
     cinvoke puts,crlf
-    invoke  WriteConsoleA,[hOut],"              SizeOfOptionalHeader - ",37,0,0
+    invoke  WriteConsoleA,[hOut],"       SizeOfOptionalHeader - ",30,0,0
     cinvoke printf,tpt,[sizeopthead]
 
     invoke fread,characteristic,1,2,[FP]
     cinvoke puts,crlf
-    invoke  WriteConsoleA,[hOut],"              Characteristics - ",32,0,0
+    invoke  WriteConsoleA,[hOut],"       Characteristics - ",25,0,0
     cinvoke printf,tpt,[characteristic]
 
+
+    ;--------------------------OPTIONAL HEADER
+    cinvoke puts,crlf
+    cinvoke puts,crlf
+    invoke WriteConsoleA,[hOut],"[Optional Header]",17,0,0
+
+    invoke fread,magic,1,2,[FP]
+    cinvoke puts,crlf
+    invoke WriteConsoleA,[hOut],"       Magic - ",15,0,0
+    cinvoke printf,tpt,[magic]
+
+    cinvoke fseek,[FP],14,1
+    invoke fread,addressEntPnt,1,4,[FP]
+    cinvoke puts,crlf
+    invoke WriteConsoleA,[hOut],"       AddressOfEntryPoint - ",31,0,0
+    cinvoke printf,tpt,[addressEntPnt]
+
+    cinvoke puts,crlf
+    .if [magic] = 20bh                                                          ;если файла 64 битный, то ImageBase = 8 байт.
+        cinvoke fseek,[FP],4,1
+        invoke fread,imageBase,1,4,[FP]
+        invoke fread,imageBaseHalf,1,4,[FP]
+        invoke WriteConsoleA,[hOut],"       ImageBase - ",19,0,0
+        cinvoke printf,tpt,[imageBaseHalf]
+        cinvoke printf,tpt,[imageBase]
+    .else                                                                       ;иначе ImageBase = 4 байта
+        cinvoke fseek,[FP],8,1
+        invoke fread, imageBase,1,4,[FP]
+        invoke WriteConsoleA,[hOut],"       ImageBase - ",19,0,0
+        cinvoke printf,tpt,[imageBase]
+    .endif
+
+    invoke fread,sectionAlignm,1,4,[FP]
+    cinvoke puts,crlf
+    invoke WriteConsoleA,[hOut],"       sectionAlignment - ",27,0,0
+    cinvoke printf,tpt,[sectionAlignm]
+
+    invoke fread,fileAlignm,1,4,[FP]
+    cinvoke puts,crlf
+    invoke WriteConsoleA,[hOut],"       FileAlignment - ",24,0,0
+    cinvoke printf,tpt,[fileAlignm]
+
+    cinvoke fseek,[FP],6,1
+    invoke fread,majorSybVersion,1,2,[FP]
+    cinvoke puts,crlf
+    invoke WriteConsoleA,[hOut],"       MajorSubsystemVersion - ",31,0,0
+    cinvoke printf,tpt,[majorSybVersion]
+
+    cinvoke fseek,[FP],8,1
+    invoke fread,sizeImage,1,4,[FP]
+    cinvoke puts,crlf
+    invoke WriteConsoleA,[hOut],"       SizeOfImage - ",22,0,0
+    cinvoke printf,tpt,[sizeImage]
+
+    invoke fread,sizeHeader,1,4,[FP]
+    cinvoke puts,crlf
+    invoke WriteConsoleA,[hOut],"       SizeHeader - ",22,0,0
+    cinvoke printf,tpt,[sizeHeader]
+
+    cinvoke fseek,[FP],4,1
+    invoke fread,subSystem,1,2,[FP]
+    cinvoke puts,crlf
+    invoke WriteConsoleA,[hOut],"       Subsystem - ",19,0,0
+    cinvoke printf,tpt,[subSystem]
+
+    .if [magic] = 20bh
+       cinvoke fseek,[FP],38,1
+    .else
+       cinvoke fseek,[FP],22,1
+    .endif
+    invoke fread,numberOfRvaAndSizes,1,4,[FP]
+    cinvoke puts,crlf
+    invoke WriteConsoleA,[hOut],"       NumberOfRvaAndSizes - ",29,0,0
+    cinvoke printf,tpt,[numberOfRvaAndSizes]
+
 notPe:
+    cinvoke puts,crlf
     invoke WriteConsoleA,[hOut],"not pe",6,0,0
 
     invoke _getch
