@@ -8,6 +8,7 @@ section '.data' data readable writeable
         mode          db      'rb',0
         fName         db      'C:\Users\admin\Desktop\peAnalyzerSoft\peFIles\run_pe64.exe',0
         tpt           db      '0x%0X ',0
+        tpn           db      '%s',0
         buf           dd      ?
         hOut          dd      ?
         crlf    =   $ - 1
@@ -37,6 +38,10 @@ section '.data' data readable writeable
         sizeHeader            dd      ?         ;sizeOfHeader
         subSystem             dd      ?
         numberOfRvaAndSizes   dd      ?
+
+        ;ТАБЛИЦА СЕКЦИЙ
+        name                  dq      ?
+
 
 section '.text' code readable executable
 start:
@@ -164,15 +169,30 @@ start:
     invoke WriteConsoleA,[hOut],"       Subsystem - ",19,0,0
     cinvoke printf,tpt,[subSystem]
 
-    .if [magic] = 20bh
+    .if [magic] = 20bh                                                          ;если файл 64 бит, переходим на 38 байта вперёд
        cinvoke fseek,[FP],38,1
     .else
-       cinvoke fseek,[FP],22,1
+       cinvoke fseek,[FP],22,1                                                  ;в ином случае 22 байта
     .endif
     invoke fread,numberOfRvaAndSizes,1,4,[FP]
     cinvoke puts,crlf
     invoke WriteConsoleA,[hOut],"       NumberOfRvaAndSizes - ",29,0,0
     cinvoke printf,tpt,[numberOfRvaAndSizes]
+
+    ;---------------ВЫЧИСЛЯЕМ СМЕЩЕНИЕ ДО ТАБЛИЦЫ СЕКЦИЙ
+    mov eax,[numberOfRvaAndSizes]                                               ;чмсло каталогов в массиве DataDirectory
+    mov ebx,8                                                                   ;8. т.к. в структуре _IMAGE_DATA_DIRECTORY  2а элемента по 4 байта
+    mul ebx
+    mov ebx,eax
+
+    ;---------------ЧИТАЕМ ТАБЛИЦУ СЕКЦИЙ
+    cinvoke fseek,[FP],ebx,1
+
+    invoke fread,name,1,8,[FP]
+    cinvoke printf,tpn,name
+
+
+
 
 notPe:
     cinvoke puts,crlf
