@@ -41,12 +41,16 @@ section '.data' data readable writeable
 
         ;“¿¡À»÷¿ —≈ ÷»…
         name                  dq      ?
+        virtualSize           dd      ?
+        virtualAddress        dd      ?
+        sizeOfRawData         dd      ?
+        pointerToRawData      dd      ?
+        pointerToRelocations  dd      ?
 
 
 section '.text' code readable executable
 start:
-    invoke GetStdHandle,STD_OUTPUT_HANDLE                                                           ;???????? ?????????? ?????? ? ???????
-        mov [hOut],eax
+
 
     invoke  fopen,fName, mode ;O_RDONLY or O_BINARY
     mov [FP], eax
@@ -185,35 +189,62 @@ start:
     mul ebx
     mov ebx,eax
 
-
     ;---------------◊»“¿≈Ã “¿¡À»÷” —≈ ÷»…
     cinvoke puts,crlf
     cinvoke puts,crlf
     cinvoke printf,"[Section Table]"
     cinvoke fseek,[FP],ebx,1
 
+    mov ebx,numsection
+
+cinvoke printf,tpt,ebx
     cinvoke puts,crlf
     invoke fread,name,1,8,[FP]
     cinvoke printf,"    Name - "
     cinvoke printf,name
+
+    cinvoke puts,crlf
+    invoke fread,virtualSize,1,4,[FP]
+    cinvoke printf,"    VirtualSize - "
+    cinvoke printf,tpt,[virtualSize]
+
+    cinvoke puts,crlf
+    invoke fread,virtualAddress,1,4,[FP]
+    cinvoke printf,"    virtualAddress - "
+    cinvoke printf,tpt,[virtualAddress]
+
+    cinvoke puts,crlf
+    invoke fread,sizeOfRawData,1,4,[FP]
+    cinvoke printf,"    sizeOfRawData - "
+    cinvoke printf,tpt,[sizeOfRawData]
+
+    cinvoke puts,crlf
+    invoke fread,pointerToRawData,1,4,[FP]
+    cinvoke printf,"    PointerToRawData - "
+    cinvoke printf,tpt,[pointerToRawData]
+
+    cinvoke puts,crlf
+    invoke fread,pointerToRelocations,1,4,[FP]
+    cinvoke printf,"    pointerToRelocations - "
+    cinvoke printf,tpt,[pointerToRelocations]
+    cinvoke printf,tpt,ebx
+
+
+
+
 
 
 
 
 notPe:
     cinvoke puts,crlf
-    invoke WriteConsoleA,[hOut],"not pe",6,0,0
+    cinvoke printf,"not pe file"
 
     invoke _getch
     invoke  exit, 0
 ; import data in the same section
 section '.idata' import data readable
- library kernel,'KERNEL32.DLL',\
-    msvcrt,'MSVCRT.DLL'
- 
- import kernel,\
-    GetStdHandle,'GetStdHandle',\
-    WriteConsoleA,'WriteConsoleA'
+ library  msvcrt,'MSVCRT.DLL'
  
  import msvcrt,\
     _getch,'_getch',\
