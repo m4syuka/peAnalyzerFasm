@@ -195,9 +195,8 @@ start:
     cinvoke printf,"[Section Table]"
     cinvoke fseek,[FP],ebx,1
 
-    mov ebx,numsection
 
-cinvoke printf,tpt,ebx
+markerSectionLoop:
     cinvoke puts,crlf
     invoke fread,name,1,8,[FP]
     cinvoke printf,"    Name - "
@@ -227,8 +226,13 @@ cinvoke printf,tpt,ebx
     invoke fread,pointerToRelocations,1,4,[FP]
     cinvoke printf,"    pointerToRelocations - "
     cinvoke printf,tpt,[pointerToRelocations]
-    cinvoke printf,tpt,ebx
 
+    cinvoke puts,crlf
+    cinvoke fseek,[FP],12,1
+
+    dec [numsection]
+    cmp [numsection],0
+        ja markerSectionLoop
 
 
 
