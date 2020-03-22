@@ -177,30 +177,20 @@ markerSectionLoop:
     cinvoke printf,"    Name - "
     cinvoke printf,name
 
-    cinvoke puts,crlf
     invoke fread,virtualSize,1,4,[FP]
-    cinvoke printf,"    VirtualSize - "
-    cinvoke printf,tpt,[virtualSize]
+    macroPrint "VirtualSize",virtualSize
 
-    cinvoke puts,crlf
     invoke fread,virtualAddress,1,4,[FP]
-    cinvoke printf,"    virtualAddress - "
-    cinvoke printf,tpt,[virtualAddress]
+    macroPrint "VirtualAddress",virtualAddress
 
-    cinvoke puts,crlf
     invoke fread,sizeOfRawData,1,4,[FP]
-    cinvoke printf,"    sizeOfRawData - "
-    cinvoke printf,tpt,[sizeOfRawData]
+    macroPrint "SizeOfRawData",sizeOfRawData
 
-    cinvoke puts,crlf
     invoke fread,pointerToRawData,1,4,[FP]
-    cinvoke printf,"    PointerToRawData - "
-    cinvoke printf,tpt,[pointerToRawData]
+    macroPrint "PointerToRawData",pointerToRawData
 
-    cinvoke puts,crlf
     invoke fread,pointerToRelocations,1,4,[FP]
-    cinvoke printf,"    pointerToRelocations - "
-    cinvoke printf,tpt,[pointerToRelocations]
+    macroPrint "PointerToRelocations",pointerToRelocations
 
     ;.if [pointerToRawData]<[addressEntPnt]
 
