@@ -67,12 +67,19 @@ start:
     invoke  fopen,fName, mode ;O_RDONLY or O_BINARY
     mov [FP], eax
     ;--------------------------DOS HEADER
+<<<<<<< HEAD
     invoke  fread,  e_magic, 1,2, [FP]                                                  ;считываем 1е 2а байта(e_magic)
     cmp [e_magic], 5a4dh                                                                ;проверка, точно ли это pe file?
         jne notPe
     cinvoke printf,"FILE INFO"
     cinvoke puts,crlf
     cinvoke printf,"[DOS Header]"
+=======
+    cinvoke printf,"[DOS Header]"
+    invoke  fread,  e_magic, 1,2, [FP]                                                  ;считываем 1е 2а байта(e_magic)
+    cmp [e_magic], 5a4dh                                                                ;проверка, точно ли это pe file?
+        jne notPe
+>>>>>>> 3a231bb6d45804a684d188588494c7dba57b680e
     macroPrint "e_magic",e_magic
 
     cinvoke fseek,[FP],3ch,0                                                            ;ставим метку туда, где находится e_lfanew(указывает на начало pe секции)
@@ -196,6 +203,7 @@ markerSectionLoop:
 
     invoke fread,pointerToRelocations,1,4,[FP]
     macroPrint "PointerToRelocations",pointerToRelocations
+<<<<<<< HEAD
 
     mov eax, [addressEntPnt]
     .if   [virtualAddress] < eax
@@ -220,6 +228,28 @@ markerSectionLoop:
     cinvoke printf,"%d",[EntrPointSection]
     cinvoke printf," - na ety section ykazivaet addressOfEntryPoint"
 
+=======
+
+    ;.if [pointerToRawData]<[addressEntPnt]
+
+    cinvoke puts,crlf
+    cinvoke fseek,[FP],12,1                                             ;переход на след секцию
+
+    dec [numsection]
+    cmp [numsection],0
+        ja markerSectionLoop
+
+     macro macroPrint str,[perem]
+     {
+        cinvoke puts,crlf
+        cinvoke printf,"    "
+        cinvoke printf,str
+        cinvoke printf," - "
+        cinvoke printf,tpt,[perem]
+     }
+
+     macroPrint "123",pointerToRawData
+>>>>>>> 3a231bb6d45804a684d188588494c7dba57b680e
 
 
     invoke _getch
