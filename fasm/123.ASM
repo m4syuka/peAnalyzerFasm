@@ -3,7 +3,17 @@ include 'win32ax.inc'
 include 'INCLUDE\MACRO\IF.INC'
 entry    start
 
+     macro macroPrint str,[perem]
+     {
+        cinvoke puts,crlf
+        cinvoke printf,"    "
+        cinvoke printf,str
+        cinvoke printf," - "
+        cinvoke printf,tpt,[perem]
+     }
 section '.data' data readable writeable
+        ;–ј«Ќќ≈
+        buff          dd      ?
         FP            dd      ?
         mode          db      'rb',0
         fName         db      'C:\Users\admin\Desktop\peAnalyzerSoft\peFIles\run_pe64.exe',0
@@ -47,6 +57,8 @@ section '.data' data readable writeable
         pointerToRawData      dd      ?
         pointerToRelocations  dd      ?
 
+        ;ƒЋя јЌјЋ»«ј
+         EntrPointSection     dd      ?
 
 section '.text' code readable executable
 start:
@@ -54,21 +66,18 @@ start:
 
     invoke  fopen,fName, mode ;O_RDONLY or O_BINARY
     mov [FP], eax
-
     ;--------------------------DOS HEADER
-    cinvoke printf,"[DOS Header]"
-    cinvoke puts,crlf
     invoke  fread,  e_magic, 1,2, [FP]                                                  ;считываем 1е 2а байта(e_magic)
     cmp [e_magic], 5a4dh                                                                ;проверка, точно ли это pe file?
         jne notPe
-    cinvoke printf,"    e_magic - "
-    cinvoke printf,tpt,[e_magic]
+    cinvoke printf,"FILE INFO"
+    cinvoke puts,crlf
+    cinvoke printf,"[DOS Header]"
+    macroPrint "e_magic",e_magic
 
     cinvoke fseek,[FP],3ch,0                                                            ;ставим метку туда, где находитс€ e_lfanew(указывает на начало pe секции)
     invoke fread,e_lfanew,1,4,[FP]                                                      ;читаем эти 4 байта
-    cinvoke puts,crlf
-    cinvoke printf,"    e_lfanew - "
-    cinvoke printf,tpt,[e_lfanew]
+    macroPrint "e_lfanew",e_lfanew
 
     ;--------------------------PE HEADER
     cinvoke puts,crlf
@@ -78,9 +87,7 @@ start:
     invoke fread,signature,1,4,[FP]                                                           ;читаем эти 4 байта
     cmp [signature],4550h                                                                     ;если они = 4550h, то ок, это pe file. ещЄ одна проверка
         jne notPe
-    cinvoke puts,crlf
-    cinvoke printf,"    Signature - "
-    cinvoke printf,tpt,[signature]
+    macroPrint "Signature",signature
 
     ;--------------------------FILE HEADER
     cinvoke puts,crlf
@@ -88,25 +95,17 @@ start:
     cinvoke printf,"[File Header]"
 
     invoke fread,machine,1,2,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    Machine - "
-    cinvoke printf,tpt,[machine]
+    macroPrint "Machine",machine
 
     invoke fread,numsection,1,2,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    NumberOfSections - "
-    cinvoke printf,tpt,[numsection]
+    macroPrint  "NumberOfSections",numsection
 
     cinvoke fseek,[FP],12,1
     invoke fread,sizeopthead,1,2,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    SizeOfOptionalHeader - "
-    cinvoke printf,tpt,[sizeopthead]
+    macroPrint "SizeOfOptionalHeader",sizeopthead
 
     invoke fread,characteristic,1,2,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    Characteristics - "
-    cinvoke printf,tpt,[characteristic]
+    macroPrint  "Characteristics",characteristic
 
 
     ;--------------------------OPTIONAL HEADER
@@ -115,18 +114,14 @@ start:
     cinvoke printf,"[Optional Header]"
 
     invoke fread,magic,1,2,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    Magic - "
-    cinvoke printf,tpt,[magic]
+    macroPrint "Magic",magic
 
     cinvoke fseek,[FP],14,1
     invoke fread,addressEntPnt,1,4,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    AddressOfEntryPoint - "
-    cinvoke printf,tpt,[addressEntPnt]
+    macroPrint "AddressOfEntryPoint",addressEntPnt
 
-    cinvoke puts,crlf
     .if [magic] = 20bh                                                          ;если файла 64 битный, то ImageBase = 8 байт.
+        cinvoke puts,crlf
         cinvoke fseek,[FP],4,1
         invoke fread,imageBase,1,4,[FP]
         invoke fread,imageBaseHalf,1,4,[FP]
@@ -136,42 +131,29 @@ start:
     .else                                                                       ;иначе ImageBase = 4 байта
         cinvoke fseek,[FP],8,1
         invoke fread, imageBase,1,4,[FP]
-        cinvoke printf,"    ImageBase - "
-        cinvoke printf,tpt,[imageBase]
+        macroPrint "ImageBase",imageBase
     .endif
 
     invoke fread,sectionAlignm,1,4,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    SectionAlignment - "
-    cinvoke printf,tpt,[sectionAlignm]
+    macroPrint "SectionAlignment",sectionAlignm
 
     invoke fread,fileAlignm,1,4,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    FileAlignment - "
-    cinvoke printf,tpt,[fileAlignm]
+    macroPrint "FileAlignment",fileAlignm
 
     cinvoke fseek,[FP],6,1
     invoke fread,majorSybVersion,1,2,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    MajorSubsystemVersion - "
-    cinvoke printf,tpt,[majorSybVersion]
+    macroPrint "MajorSubsystemVersion",majorSybVersion
 
     cinvoke fseek,[FP],8,1
     invoke fread,sizeImage,1,4,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    SizeOfImage - "
-    cinvoke printf,tpt,[sizeImage]
+    macroPrint "SizeOfImage",sizeImage
 
     invoke fread,sizeHeader,1,4,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    SizeHeader - "
-    cinvoke printf,tpt,[sizeHeader]
+    macroPrint "SizeHeader",sizeHeader
 
     cinvoke fseek,[FP],4,1
     invoke fread,subSystem,1,2,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    Subsystem - "
-    cinvoke printf,tpt,[subSystem]
+    macroPrint "Subsystem",subSystem
 
     .if [magic] = 20bh                                                          ;если файл 64 бит, переходим на 38 байта вперЄд
        cinvoke fseek,[FP],38,1
@@ -179,9 +161,7 @@ start:
        cinvoke fseek,[FP],22,1                                                  ;в ином случае 22 байта
     .endif
     invoke fread,numberOfRvaAndSizes,1,4,[FP]
-    cinvoke puts,crlf
-    cinvoke printf,"    NumberOfRvaAndSizes - "
-    cinvoke printf,tpt,[numberOfRvaAndSizes]
+    macroPrint "NumberOfRvaAndSizes",numberOfRvaAndSizes
 
     ;---------------¬џ„»—Ћя≈ћ —ћ≈ў≈Ќ»≈ ƒќ “јЅЋ»÷џ —≈ ÷»…
     mov eax,[numberOfRvaAndSizes]                                               ;чмсло каталогов в массиве DataDirectory
@@ -195,50 +175,55 @@ start:
     cinvoke printf,"[Section Table]"
     cinvoke fseek,[FP],ebx,1
 
-
+    mov [buff],0
 markerSectionLoop:
     cinvoke puts,crlf
     invoke fread,name,1,8,[FP]
     cinvoke printf,"    Name - "
     cinvoke printf,name
 
-    cinvoke puts,crlf
     invoke fread,virtualSize,1,4,[FP]
-    cinvoke printf,"    VirtualSize - "
-    cinvoke printf,tpt,[virtualSize]
+    macroPrint "VirtualSize",virtualSize
 
-    cinvoke puts,crlf
     invoke fread,virtualAddress,1,4,[FP]
-    cinvoke printf,"    virtualAddress - "
-    cinvoke printf,tpt,[virtualAddress]
+    macroPrint "VirtualAddress",virtualAddress
 
-    cinvoke puts,crlf
     invoke fread,sizeOfRawData,1,4,[FP]
-    cinvoke printf,"    sizeOfRawData - "
-    cinvoke printf,tpt,[sizeOfRawData]
+    macroPrint "SizeOfRawData",sizeOfRawData
 
-    cinvoke puts,crlf
     invoke fread,pointerToRawData,1,4,[FP]
-    cinvoke printf,"    PointerToRawData - "
-    cinvoke printf,tpt,[pointerToRawData]
+    macroPrint "PointerToRawData",pointerToRawData
 
-    cinvoke puts,crlf
     invoke fread,pointerToRelocations,1,4,[FP]
-    cinvoke printf,"    pointerToRelocations - "
-    cinvoke printf,tpt,[pointerToRelocations]
+    macroPrint "PointerToRelocations",pointerToRelocations
+
+    mov eax, [addressEntPnt]
+    .if   [virtualAddress] < eax
+        mov ebx,[buff]
+        mov [EntrPointSection],ebx
+    .endif
 
     cinvoke puts,crlf
-    cinvoke fseek,[FP],12,1
+    cinvoke fseek,[FP],12,1                                             ;переход на след секцию
 
-    dec [numsection]
-    cmp [numsection],0
-        ja markerSectionLoop
+    inc [buff]
+    mov eax,[numsection]
+    cmp [buff],eax
+        jb markerSectionLoop
+
+    ;------------------------------------јЌјЋ»«
+    cinvoke puts,crlf
+    cinvoke puts,crlf
+    cinvoke printf,"ANALYSIS"
+    cinvoke puts,crlf
+    cinvoke puts,crlf
+    cinvoke printf,"%d",[EntrPointSection]
+    cinvoke printf," - na ety section ykazivaet addressOfEntryPoint"
 
 
 
-
-
-
+    invoke _getch
+    invoke  exit, 0
 
 notPe:
     cinvoke puts,crlf
