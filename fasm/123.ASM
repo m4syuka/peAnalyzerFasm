@@ -13,7 +13,10 @@ entry    start
      }
 section '.data' data readable writeable
         ;РАЗНОЕ
-        buff          dd      ?
+        buff          dd      ?              ;секция, на которую указывает addressOfEntryPoint
+        buff2         dd      ?              ;храним начало след секции
+        buff3         dd      ?
+        buff4         dd      ?              ;в цикле , где считается энтропия секций. под переменную
         FP            dd      ?
         mode          db      'rb',0
         fName         db      'C:\Users\admin\Desktop\peAnalyzerSoft\peFIles\run_pe64.exe',0
@@ -44,7 +47,7 @@ section '.data' data readable writeable
         sectionAlignm         dd      ?         ;SectionsAlignment
         fileAlignm            dd      ?         ;FileAlignment
         majorSybVersion       dd      ?         ;MajorSubsystemVersion
-        sizeImage             dd      ?         ;sizeOfUmage
+        sizeImage             dd      ?         ;sizeOfImage
         sizeHeader            dd      ?         ;sizeOfHeader
         subSystem             dd      ?
         numberOfRvaAndSizes   dd      ?
@@ -59,6 +62,7 @@ section '.data' data readable writeable
 
         ;ДЛЯ АНАЛИЗА
          EntrPointSection     dd      ?
+         entropyMassiv        dd      256 dup(?)
 
 section '.text' code readable executable
 start:
@@ -67,19 +71,12 @@ start:
     invoke  fopen,fName, mode ;O_RDONLY or O_BINARY
     mov [FP], eax
     ;--------------------------DOS HEADER
-<<<<<<< HEAD
     invoke  fread,  e_magic, 1,2, [FP]                                                  ;считываем 1е 2а байта(e_magic)
     cmp [e_magic], 5a4dh                                                                ;проверка, точно ли это pe file?
         jne notPe
     cinvoke printf,"FILE INFO"
     cinvoke puts,crlf
     cinvoke printf,"[DOS Header]"
-=======
-    cinvoke printf,"[DOS Header]"
-    invoke  fread,  e_magic, 1,2, [FP]                                                  ;считываем 1е 2а байта(e_magic)
-    cmp [e_magic], 5a4dh                                                                ;проверка, точно ли это pe file?
-        jne notPe
->>>>>>> 3a231bb6d45804a684d188588494c7dba57b680e
     macroPrint "e_magic",e_magic
 
     cinvoke fseek,[FP],3ch,0                                                            ;ставим метку туда, где находится e_lfanew(указывает на начало pe секции)
@@ -103,7 +100,6 @@ start:
 
     invoke fread,machine,1,2,[FP]
     macroPrint "Machine",machine
-
     invoke fread,numsection,1,2,[FP]
     macroPrint  "NumberOfSections",numsection
 
@@ -154,6 +150,9 @@ start:
     cinvoke fseek,[FP],8,1
     invoke fread,sizeImage,1,4,[FP]
     macroPrint "SizeOfImage",sizeImage
+    cinvoke ftell,[FP]
+    mov [buff2],eax
+    cinvoke printf,tpt,buff2
 
     invoke fread,sizeHeader,1,4,[FP]
     macroPrint "SizeHeader",sizeHeader
@@ -203,7 +202,24 @@ markerSectionLoop:
 
     invoke fread,pointerToRelocations,1,4,[FP]
     macroPrint "PointerToRelocations",pointerToRelocations
-<<<<<<< HEAD
+
+    cinvoke ftell,[FP]                                                  ;запоминаем, где мы остановились
+    mov [buff2],eax
+
+    cinvoke fseek,[FP],[pointerToRawData],0                             ;переходим к данным данной секции
+    ;mov eax,[sizeOfRawData]
+    ;mov [buff4],eax
+    cinvoke puts,crlf
+
+entropyloop:
+    cinvoke fread,buff3,1,1,[FP]
+    cinvoke printf,"%X ",[buff3]
+    inc [buff4]
+    mov eax,[sizeOfRawData]
+    .if [buff4]<eax
+       jmp  entropyloop
+    .endif
+    mov [buff4],0
 
     mov eax, [addressEntPnt]
     .if   [virtualAddress] < eax
@@ -212,6 +228,7 @@ markerSectionLoop:
     .endif
 
     cinvoke puts,crlf
+    cinvoke fseek,[FP],[buff2],0
     cinvoke fseek,[FP],12,1                                             ;переход на след секцию
 
     inc [buff]
@@ -228,28 +245,7 @@ markerSectionLoop:
     cinvoke printf,"%d",[EntrPointSection]
     cinvoke printf," - na ety section ykazivaet addressOfEntryPoint"
 
-=======
 
-    ;.if [pointerToRawData]<[addressEntPnt]
-
-    cinvoke puts,crlf
-    cinvoke fseek,[FP],12,1                                             ;переход на след секцию
-
-    dec [numsection]
-    cmp [numsection],0
-        ja markerSectionLoop
-
-     macro macroPrint str,[perem]
-     {
-        cinvoke puts,crlf
-        cinvoke printf,"    "
-        cinvoke printf,str
-        cinvoke printf," - "
-        cinvoke printf,tpt,[perem]
-     }
-
-     macroPrint "123",pointerToRawData
->>>>>>> 3a231bb6d45804a684d188588494c7dba57b680e
 
 
     invoke _getch
