@@ -63,6 +63,7 @@ section '.data' data readable writeable
         ;ДЛЯ АНАЛИЗА
          EntrPointSection     dd      ?
          entropyMassiv        dd      256 dup(?)
+         entropySum           dd      ?
 
 section '.text' code readable executable
 start:
@@ -207,23 +208,29 @@ markerSectionLoop:
     mov [buff2],eax
 
     cinvoke fseek,[FP],[pointerToRawData],0                             ;переходим к данным данной секции
-    ;mov eax,[sizeOfRawData]
-    ;mov [buff4],eax
     cinvoke puts,crlf
 
 entropyloop:
-    cinvoke fread,buff3,1,1,[FP]
-    cinvoke printf,"%X ",[buff3]
-    inc [buff4]
-    mov eax,[sizeOfRawData]
-    .if [buff4]<eax
+    cinvoke fread,buff3,1,1,[FP]                                        ;считываем первый байт
+
+    ;Получаем кол-о байт
+    mov eax,[buff3]                                                     ;для адресации
+    mov ebx,4
+    mul ebx                                                             ;т.к. dd (4 байта)
+    inc [entropyMassiv+eax]
+
+    inc [buff4]                                                         ;увеличиваем счетчик на 1
+    mov eax,[sizeOfRawData]                                             ;чтобы сравнивать счетчик и размер данных(можно сравнивать m/r)
+    .if [buff4]<eax                                                     ;если меньше, то на
        jmp  entropyloop
     .endif
     mov [buff4],0
 
+
+
     mov eax, [addressEntPnt]
-    .if   [virtualAddress] < eax
-        mov ebx,[buff]
+    .if   [virtualAddress] < eax                                        ;если виртуальынй адрес меньше адреса, на который указывается addressEntPnt
+        mov ebx,[buff]                                                  ;то это та секция, на которую указывает AddressOfEntryPoint
         mov [EntrPointSection],ebx
     .endif
 
