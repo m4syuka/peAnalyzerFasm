@@ -14,9 +14,6 @@ entry    start
 section '.data' data readable writeable
         ;РАЗНОЕ
         buff          dd      ?              ;секция, на которую указывает addressOfEntryPoint
-        buff2         dd      ?              ;храним начало след секции
-        buff3         dd      ?
-        buff4         dd      ?              ;в цикле , где считается энтропия секций. под переменную
         FP            dd      ?
         mode          db      'rb',0
         fName         db      'C:\Users\admin\Desktop\peAnalyzerSoft\peFIles\run_pe64.exe',0
@@ -61,14 +58,20 @@ section '.data' data readable writeable
         pointerToRelocations  dd      ?
 
         ;ДЛЯ АНАЛИЗА
+         buff2                dd      ?              ;храним начало след секции
+         buff3                dd      ?
+         buff4                dd      ?              ;в цикле , где считается энтропия секций. под переменную
+         buff5                dd      ?
          EntrPointSection     dd      ?
          entropyMassiv        dd      256 dup(?)
-         entropySum           dd      ?
+         entropySum           dq      ?
+         curElement           dd      ?
+         buffEntropy          dq      ?
+         tempEntropy          dq      ?
 
 section '.text' code readable executable
 start:
-
-
+    finit
     invoke  fopen,fName, mode ;O_RDONLY or O_BINARY
     mov [FP], eax
     ;--------------------------DOS HEADER
@@ -153,7 +156,6 @@ start:
     macroPrint "SizeOfImage",sizeImage
     cinvoke ftell,[FP]
     mov [buff2],eax
-    cinvoke printf,tpt,buff2
 
     invoke fread,sizeHeader,1,4,[FP]
     macroPrint "SizeHeader",sizeHeader
@@ -204,16 +206,21 @@ markerSectionLoop:
     invoke fread,pointerToRelocations,1,4,[FP]
     macroPrint "PointerToRelocations",pointerToRelocations
 
+    ;ЕСЛИ РАЗМЕР ДАННЫХ СЕКЦИИ = 0, ТО НЕ ИМЕЕТ СМЫСЛА ИСКАТЬ ДЛЯ НЕГО ЭНТРОПИЮ. ПРОСТО ГОВОРИМ ОБ ЭТОМ И ПЕРЕХОДИМ НА СЛЕД СЕКЦИЮ
+    .if [sizeOfRawData] = 0
+        cinvoke puts,crlf
+        cinvoke printf,"            Entropy this section: 0"
+        jmp sizeRawDataZero
+    .endif
     cinvoke ftell,[FP]                                                  ;запоминаем, где мы остановились
     mov [buff2],eax
 
     cinvoke fseek,[FP],[pointerToRawData],0                             ;переходим к данным данной секции
     cinvoke puts,crlf
-
-entropyloop:
+;ЗАПОЛНЯЕМ МАССИВА БАЙТАМИ
+getMassivEntropyloop:
     cinvoke fread,buff3,1,1,[FP]                                        ;считываем первый байт
-
-    ;Получаем кол-о байт
+    ;Получаем кол-во байт
     mov eax,[buff3]                                                     ;для адресации
     mov ebx,4
     mul ebx                                                             ;т.к. dd (4 байта)
@@ -222,38 +229,71 @@ entropyloop:
     inc [buff4]                                                         ;увеличиваем счетчик на 1
     mov eax,[sizeOfRawData]                                             ;чтобы сравнивать счетчик и размер данных(можно сравнивать m/r)
     .if [buff4]<eax                                                     ;если меньше, то на
-       jmp  entropyloop
+       jmp getMassivEntropyloop
     .endif
     mov [buff4],0
 
+    mov esi,0
+    mov [buff5],0                                                       ;ЧТОБЫ СЧИТЫВАТЬ КОЛ-ВО ПРОХОДОВ(ДЛЯ ЦИКЛА)
+;СЧИТАЕМ ЭНТРОПИЮ
+calculateEntropy:
+    fld1                                                                ;В СТЕК ОТПРАВЛЯЕМ 1(ДЛЯ ЛОГАРИФМА)_
+    fld [entropyMassiv+esi]                                             ;В СТЕК ТЕКУЩИЙ ЭЛЕМЕНТ МАССИВА
+    fld [sizeOfRawData]                                                 ;В СТЕК sizeOfRawData
+    fdivp                                                               ;ТЕКУЩИЙ ЭЛЕМЕНТ МАССИВА / sizeOfRawData (С УДАЛЕНИМ ПОСЛЕДНЕГО ЭЛЕМЕНТА ИЗ СТЕКА)
+    fst [tempEntropy]                                                   ;ЗАПОМИНАЕМ ЭТО В tempEntropy
+    ftst                                                                ;сравниваем st(0)(текущий элемент массива/sizeOfRawData) с 0
+    fstsw ax                                                            ;сохраняет текущее значение регистров SR в AX
+    sahf                                                                ;загружает флаги SF, ZF, AF, PF, CF из регистра ah (позволяет работаь как с обычным cmp)
+      jna nextElement                                                   ;st(0)<0? -> nextElement
+    FYL2X                                                               ;ПОЛУЧАЕМ LOG 2 (tempEntropy)
+    FLDLN2                                                              ;В СТЕК LN2
+    FMULP                                                               ;LOG 2 (tempEntropy) * LN2 = НАТУРАЛЬНЫЙ ЛОГАРИФМ (tempEntropy)
+    FLDL2E                                                              ;В СТЕК LOG 2 (e)
+    fmulp                                                               ;НАТУРАЛЬНЫЙ ЛОГАРИФМ (tempEntropy) * LOG 2 (e) = LOG2(tempEntropy)
+    fld [tempEntropy]                                                   ;В СТЕК tempEntropy
+    fmulp                                                               ;tempEntropy * LOG2(tempEntropy)
+    fabs                                                                ;|tempEntropy * LOG2(tempEntropy)|
+    fld [entropySum]                                                    ;В СТЕК СУММУ ЭНТРОПИИ
+    faddp                                                               ;+=
+    fst [entropySum]                                                    ;УЖЕ НОВОЕ ЗНАЧЕНИЕ В entropySum
+    fldz                                                                ;В СТЕК 0
+    fstp [entropyMassiv+esi]                                            ; = 0 УЖЕ ИСПОЛЬЗОВАННЫЙ ЭЛЕМЕНТ
+nextElement:
+    add esi,4                                                           ;СЛЕД ЭЛЕМЕНТ
+    inc [buff5]                                                         ;СЧЕТЧИК +1
+    .if [buff5]<256                                                     ;ЕСЛИ ОН <256
+       finit                                                            ;ОЧИЩАЕМ СТЕК
+       jmp calculateEntropy                                             ;СЧИТАЕМ ЭНТРОПИЮ ДЛЯ СЛЕД ЭЛЕМЕНТА
+    .endif
+    cinvoke printf,"            Entropy this section: "
+    cinvoke printf,"%f",dword [entropySum],dword [entropySum+4]         ;ВЫВОДИМ ЭНТРОПИЮ СЕКЦИИ
+    fldz                                                                ;0 В СТЕК
+    fstp [entropySum]                                                    ;0 В entropySum (ТАКИМ ОБРАЗОМ ОЧИЩАЕМ)
 
-
+;ИЩЕМ ТОЧКУ ВХОДА
     mov eax, [addressEntPnt]
     .if   [virtualAddress] < eax                                        ;если виртуальынй адрес меньше адреса, на который указывается addressEntPnt
         mov ebx,[buff]                                                  ;то это та секция, на которую указывает AddressOfEntryPoint
         mov [EntrPointSection],ebx
     .endif
 
-    cinvoke puts,crlf
     cinvoke fseek,[FP],[buff2],0
+sizeRawDataZero:
     cinvoke fseek,[FP],12,1                                             ;переход на след секцию
+    cinvoke puts,crlf
 
     inc [buff]
     mov eax,[numsection]
-    cmp [buff],eax
-        jb markerSectionLoop
+    .if [buff]< eax
+        jmp markerSectionLoop
+    .endif
 
     ;------------------------------------АНАЛИЗ
     cinvoke puts,crlf
     cinvoke puts,crlf
-    cinvoke printf,"ANALYSIS"
-    cinvoke puts,crlf
-    cinvoke puts,crlf
     cinvoke printf,"%d",[EntrPointSection]
     cinvoke printf," - na ety section ykazivaet addressOfEntryPoint"
-
-
-
 
     invoke _getch
     invoke  exit, 0
