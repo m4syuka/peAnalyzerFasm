@@ -3,20 +3,12 @@ include 'win32ax.inc'
 include 'INCLUDE\MACRO\IF.INC'
 entry    start
 
-     macro macroPrint str,[perem]
-     {
-        cinvoke puts,crlf
-        cinvoke printf,"    "
-        cinvoke printf,str
-        cinvoke printf," - "
-        cinvoke printf,tpt,[perem]
-     }
 section '.data' data readable writeable
         ;РАЗНОЕ
         buff          dd      ?              ;секция, на которую указывает addressOfEntryPoint
         FP            dd      ?
         mode          db      'rb',0
-        fName         db      'C:\Users\admin\Desktop\peAnalyzerSoft\peFIles\run_pe64.exe',0
+        fName         db      'C:\Users\admin\Desktop\peAnalyzerSoft\virus\trojan3OK.vir',0
         tpt           db      '0x%0X ',0
         tpn           db      '%s',0
         buf           dd      ?
@@ -57,18 +49,48 @@ section '.data' data readable writeable
         pointerToRawData      dd      ?
         pointerToRelocations  dd      ?
 
-        ;ДЛЯ АНАЛИЗА
-         buff2                dd      ?              ;храним начало след секции
-         buff3                dd      ?
-         buff4                dd      ?              ;в цикле , где считается энтропия секций. под переменную
-         buff5                dd      ?
-         EntrPointSection     dd      ?
-         entropyMassiv        dd      256 dup(?)
-         entropySum           dq      ?
-         curElement           dd      ?
-         buffEntropy          dq      ?
-         tempEntropy          dq      ?
+        ;ТАБЛИЦА ИМПОРТА
+        importTableRVA        dd      ?         ;rva таблицы импорт
+        importTableSize       dd      ?         ;размер таблицы ипорта
+        rawImportTable        dd      ?         ;rwa до таблицы импорта
+        VAImportSection       dd      ?         ;чтобы вычислять rwa
+        VSImportSection       dd      ?         ;чтобы вычислять rwa
+        importPointerRaw      dd      ?         ;чтобы вычислять rwa
 
+        ;_IMAGE_IMPORT_DESCRIPTOR
+        OriginalFirstThunk    dd      ?
+        TimeDateStamp         dd      ?
+        ForwarderChain        dd      ?
+        NameImport            dd      ?
+        FirstThunk            dd      ?
+
+        ;ДЛЯ АНАЛИЗА
+        buff2                 dd      ?              ;храним начало след секции
+        buff3                 dd      ?
+        buff4                 dd      ?              ;в цикле , где считается энтропия секций. под переменную
+        buff5                 dd      ?
+        EntrPointSection      dd      ?
+        entropyMassiv         dd      256 dup(?)
+        entropySum            dq      ?
+        curElement            dd      ?
+        buffEntropy           dq      ?
+        tempEntropy           dq      ?
+macro rwa [somethingRva]
+{
+        ;rwa = rva - VAImportSection + importSectionPointerToRawData
+        mov eax,[somethingRva]
+        sub eax,[VAImportSection]
+        add eax,[importPointerRaw]
+        push eax                                                                ;заносим в стек
+}
+macro macroPrint str,[perem]
+{
+        cinvoke puts,crlf
+        cinvoke printf,"    "
+        cinvoke printf,str
+        cinvoke printf," - "
+        cinvoke printf,tpt,[perem]
+}
 section '.text' code readable executable
 start:
     finit
@@ -171,13 +193,18 @@ start:
     .endif
     invoke fread,numberOfRvaAndSizes,1,4,[FP]
     macroPrint "NumberOfRvaAndSizes",numberOfRvaAndSizes
+    cinvoke fseek,[FP],8,1
+    invoke fread,importTableRVA,1,4,[FP]
+    macroPrint "Import table rva",importTableRVA
+    invoke fread,importTableSize,1,4,[FP]
+    macroPrint "Import table size",importTableSize
 
     ;---------------ВЫЧИСЛЯЕМ СМЕЩЕНИЕ ДО ТАБЛИЦЫ СЕКЦИЙ
     mov eax,[numberOfRvaAndSizes]                                               ;чмсло каталогов в массиве DataDirectory
     mov ebx,8                                                                   ;8. т.к. в структуре _IMAGE_DATA_DIRECTORY  2а элемента по 4 байта
     mul ebx
+    sub eax,16
     mov ebx,eax
-
     ;---------------ЧИТАЕМ ТАБЛИЦУ СЕКЦИЙ
     cinvoke puts,crlf
     cinvoke puts,crlf
@@ -206,6 +233,25 @@ markerSectionLoop:
     invoke fread,pointerToRelocations,1,4,[FP]
     macroPrint "PointerToRelocations",pointerToRelocations
 
+    ;ПОЛУЧАЕМ RAW ТАБЛИЦЫ ИМПОРТА
+    ;если virtualAddress<=rva<virtualAddress+virtualSize , то это наша секция
+    mov ebx,[importTableRVA]
+    .if [virtualAddress]<=ebx
+        mov eax,[virtualAddress]
+        add eax,[virtualSize]
+        .if [importTableRVA]<eax
+            ;запоминаем VA,VS, pointerToRawData данной секции
+            mov eax,[importTableRVA]
+            sub eax,[virtualAddress]
+            add eax,[pointerToRawData]
+            mov [rawImportTable],eax
+            cinvoke printf,tpt,[rawImportTable]
+            mov eax,[virtualAddress]
+            mov [VAImportSection],eax
+            mov eax,[pointerToRawData]
+            mov [importPointerRaw],eax
+        .endif
+    .endif
     ;ЕСЛИ РАЗМЕР ДАННЫХ СЕКЦИИ = 0, ТО НЕ ИМЕЕТ СМЫСЛА ИСКАТЬ ДЛЯ НЕГО ЭНТРОПИЮ. ПРОСТО ГОВОРИМ ОБ ЭТОМ И ПЕРЕХОДИМ НА СЛЕД СЕКЦИЮ
     .if [sizeOfRawData] = 0
         cinvoke puts,crlf
@@ -294,8 +340,45 @@ sizeRawDataZero:
     cinvoke puts,crlf
     cinvoke printf,"%d",[EntrPointSection]
     cinvoke printf," - na ety section ykazivaet addressOfEntryPoint"
+    cinvoke puts,crlf
+    cinvoke puts,crlf
+    cinvoke puts,crlf
 
+    ;ТАБЛИЦА ИМПОРТА
+    cinvoke printf,tpt,[rawImportTable]
+    macroPrint "rawImportTable",rawImportTable
+    cinvoke puts,crlf
+nextDll:
+    cinvoke fseek,[FP],[rawImportTable],0                                           ;ставим метку на первый _IMAGE_IMPORT_DESCRIPTOR
+    cinvoke fread,buff2,1,4,[FP]                                                    ;rva до Import Name Table
+    .if [buff2] = 0h
+        jmp exitProg
+    .endif
+    rwa buff2
+    pop [buff4]                                                                     ;rwa до начала Import Name Table
+nextRvaFunc:
+    cinvoke fseek,[FP],[buff4],0                                                    ;ставим указатель на начало Import Name Table
+    cinvoke fread,buff3,1,4,[FP]                                                    ;получаем rva на структуру Import Name Table
+    .if [buff3]=0h                                                                  ;если она = 0 (конец rva ф-ий - 4байта = 0 )
+        add [rawImportTable],20                                                     ;+20
+        jmp nextDll
+    .endif
+    rwa buff3
+    pop ebx
+    add ebx,2
+    cinvoke fseek,[FP],ebx,0                                                         ;метка на структуру с hint(2 байта )и имя функции
+readNameFunc:
+    cinvoke fread,buff5,1,1,[FP]                                                     ;читаем байт
+    cinvoke printf,"%c",[buff5]                                                      ;выводим его
+    .if [buff5]<> 100h                                                               ;если он != 0
+        jmp readNameFunc                                                             ;то читаем след элемент
+    .endif
+    cinvoke puts,crlf
+    add [buff4],4                                                                    ;добавляем 4 байт
+    jmp nextRvaFunc                                                                  ;читаем след rva функции
+exitProg:
     invoke _getch
+    invoke ExitProcess, 0
     invoke  exit, 0
 
 notPe:
@@ -306,7 +389,8 @@ notPe:
     invoke  exit, 0
 ; import data in the same section
 section '.idata' import data readable
- library  msvcrt,'MSVCRT.DLL'
+ library  msvcrt,'MSVCRT.DLL',\
+          kernel, 'KERNEL32.DLL'
  
  import msvcrt,\
     _getch,'_getch',\
@@ -319,3 +403,5 @@ section '.idata' import data readable
     ftell,'ftell',\
     exit,'exit',\
     fseek,'fseek'
+ import kernel,\
+        ExitProcess,'ExitProcess'
