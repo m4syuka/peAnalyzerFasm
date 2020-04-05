@@ -8,7 +8,7 @@ section '.data' data readable writeable
         buff          dd      ?              ;секция, на которую указывает addressOfEntryPoint
         FP            dd      ?
         mode          db      'rb',0
-        fName         db      'C:\Users\admin\Desktop\peAnalyzerSoft\virus\trojan3OK.vir',0
+        fName         db      'C:\Users\admin\Desktop\peAnalyzerSoft\peFIles\perparserUpx.exe',0
         tpt           db      '0x%0X ',0
         tpn           db      '%s',0
         buf           dd      ?
@@ -69,12 +69,16 @@ section '.data' data readable writeable
         buff3                 dd      ?
         buff4                 dd      ?              ;в цикле , где считается энтропия секций. под переменную
         buff5                 dd      ?
+        forCmpEntropy         dq      6.7            ;будем сравнивать с этим числом энтропию секций. если она >, то плохо
         EntrPointSection      dd      ?
         entropyMassiv         dd      256 dup(?)
         entropySum            dq      ?
         curElement            dd      ?
         buffEntropy           dq      ?
         tempEntropy           dq      ?
+
+        arrayBadGunc          db        "lsDebuggerPresent","GetThreadContext","ReadProcessMemory",0
+
 macro rwa [somethingRva]
 {
         ;rwa = rva - VAImportSection + importSectionPointerToRawData
@@ -100,91 +104,91 @@ start:
     invoke  fread,  e_magic, 1,2, [FP]                                                  ;считываем 1е 2а байта(e_magic)
     cmp [e_magic], 5a4dh                                                                ;проверка, точно ли это pe file?
         jne notPe
-    cinvoke printf,"FILE INFO"
-    cinvoke puts,crlf
-    cinvoke printf,"[DOS Header]"
-    macroPrint "e_magic",e_magic
+    ;cinvoke printf,"FILE INFO"
+    ;cinvoke puts,crlf
+    ;cinvoke printf,"[DOS Header]"
+    ;macroPrint "e_magic",e_magic
 
     cinvoke fseek,[FP],3ch,0                                                            ;ставим метку туда, где находится e_lfanew(указывает на начало pe секции)
     invoke fread,e_lfanew,1,4,[FP]                                                      ;читаем эти 4 байта
-    macroPrint "e_lfanew",e_lfanew
+    ;macroPrint "e_lfanew",e_lfanew
 
     ;--------------------------PE HEADER
-    cinvoke puts,crlf
-    cinvoke puts,crlf
-    cinvoke printf,"[PE Header]"
+    ;cinvoke puts,crlf
+    ;cinvoke puts,crlf
+    ;cinvoke printf,"[PE Header]"
     cinvoke fseek,[FP],[e_lfanew],0                                                     ;ставим метку на начало pe секции
     invoke fread,signature,1,4,[FP]                                                           ;читаем эти 4 байта
     cmp [signature],4550h                                                                     ;если они = 4550h, то ок, это pe file. ещё одна проверка
         jne notPe
-    macroPrint "Signature",signature
+    ;macroPrint "Signature",signature
 
     ;--------------------------FILE HEADER
-    cinvoke puts,crlf
-    cinvoke puts,crlf
-    cinvoke printf,"[File Header]"
+    ;cinvoke puts,crlf
+    ;cinvoke puts,crlf
+    ;cinvoke printf,"[File Header]"
 
     invoke fread,machine,1,2,[FP]
-    macroPrint "Machine",machine
+    ;macroPrint "Machine",machine
     invoke fread,numsection,1,2,[FP]
-    macroPrint  "NumberOfSections",numsection
+    ;macroPrint  "NumberOfSections",numsection
 
     cinvoke fseek,[FP],12,1
     invoke fread,sizeopthead,1,2,[FP]
-    macroPrint "SizeOfOptionalHeader",sizeopthead
+    ;macroPrint "SizeOfOptionalHeader",sizeopthead
 
     invoke fread,characteristic,1,2,[FP]
-    macroPrint  "Characteristics",characteristic
+    ;macroPrint  "Characteristics",characteristic
 
 
     ;--------------------------OPTIONAL HEADER
     cinvoke puts,crlf
     cinvoke puts,crlf
-    cinvoke printf,"[Optional Header]"
+    ;cinvoke printf,"[Optional Header]"
 
     invoke fread,magic,1,2,[FP]
-    macroPrint "Magic",magic
+    ;macroPrint "Magic",magic
 
     cinvoke fseek,[FP],14,1
     invoke fread,addressEntPnt,1,4,[FP]
-    macroPrint "AddressOfEntryPoint",addressEntPnt
+    ;macroPrint "AddressOfEntryPoint",addressEntPnt
 
     .if [magic] = 20bh                                                          ;если файла 64 битный, то ImageBase = 8 байт.
         cinvoke puts,crlf
         cinvoke fseek,[FP],4,1
         invoke fread,imageBase,1,4,[FP]
         invoke fread,imageBaseHalf,1,4,[FP]
-        cinvoke printf,"    ImageBase - "
-        cinvoke printf,"0x%x",[imageBaseHalf]
-        cinvoke printf,"%x",[imageBase]
+        ;cinvoke printf,"    ImageBase - "
+        ;cinvoke printf,"0x%x",[imageBaseHalf]
+        ;cinvoke printf,"%x",[imageBase]
     .else                                                                       ;иначе ImageBase = 4 байта
         cinvoke fseek,[FP],8,1
         invoke fread, imageBase,1,4,[FP]
-        macroPrint "ImageBase",imageBase
+        ;macroPrint "ImageBase",imageBase
     .endif
 
     invoke fread,sectionAlignm,1,4,[FP]
-    macroPrint "SectionAlignment",sectionAlignm
+    ;macroPrint "SectionAlignment",sectionAlignm
 
     invoke fread,fileAlignm,1,4,[FP]
-    macroPrint "FileAlignment",fileAlignm
+    ;macroPrint "FileAlignment",fileAlignm
 
     cinvoke fseek,[FP],6,1
     invoke fread,majorSybVersion,1,2,[FP]
-    macroPrint "MajorSubsystemVersion",majorSybVersion
+    ;macroPrint "MajorSubsystemVersion",majorSybVersion
 
     cinvoke fseek,[FP],8,1
     invoke fread,sizeImage,1,4,[FP]
-    macroPrint "SizeOfImage",sizeImage
+    ;macroPrint "SizeOfImage",sizeImage
     cinvoke ftell,[FP]
     mov [buff2],eax
 
     invoke fread,sizeHeader,1,4,[FP]
-    macroPrint "SizeHeader",sizeHeader
+    ;macroPrint "SizeHeader",sizeHeader
 
     cinvoke fseek,[FP],4,1
     invoke fread,subSystem,1,2,[FP]
-    macroPrint "Subsystem",subSystem
+    ;macroPrint "Subsystem",subSystem
 
     .if [magic] = 20bh                                                          ;если файл 64 бит, переходим на 38 байта вперёд
        cinvoke fseek,[FP],38,1
@@ -192,12 +196,12 @@ start:
        cinvoke fseek,[FP],22,1                                                  ;в ином случае 22 байта
     .endif
     invoke fread,numberOfRvaAndSizes,1,4,[FP]
-    macroPrint "NumberOfRvaAndSizes",numberOfRvaAndSizes
+    ;macroPrint "NumberOfRvaAndSizes",numberOfRvaAndSizes
     cinvoke fseek,[FP],8,1
     invoke fread,importTableRVA,1,4,[FP]
-    macroPrint "Import table rva",importTableRVA
+    ;macroPrint "Import table rva",importTableRVA
     invoke fread,importTableSize,1,4,[FP]
-    macroPrint "Import table size",importTableSize
+    ;macroPrint "Import table size",importTableSize
 
     ;---------------ВЫЧИСЛЯЕМ СМЕЩЕНИЕ ДО ТАБЛИЦЫ СЕКЦИЙ
     mov eax,[numberOfRvaAndSizes]                                               ;чмсло каталогов в массиве DataDirectory
@@ -206,8 +210,8 @@ start:
     sub eax,16
     mov ebx,eax
     ;---------------ЧИТАЕМ ТАБЛИЦУ СЕКЦИЙ
-    cinvoke puts,crlf
-    cinvoke puts,crlf
+    ;cinvoke puts,crlf
+    ;cinvoke puts,crlf
     cinvoke printf,"[Section Table]"
     cinvoke fseek,[FP],ebx,1
 
@@ -219,19 +223,19 @@ markerSectionLoop:
     cinvoke printf,name
 
     invoke fread,virtualSize,1,4,[FP]
-    macroPrint "VirtualSize",virtualSize
+    ;macroPrint "VirtualSize",virtualSize
 
     invoke fread,virtualAddress,1,4,[FP]
-    macroPrint "VirtualAddress",virtualAddress
+    ;macroPrint "VirtualAddress",virtualAddress
 
     invoke fread,sizeOfRawData,1,4,[FP]
-    macroPrint "SizeOfRawData",sizeOfRawData
+    ;macroPrint "SizeOfRawData",sizeOfRawData
 
     invoke fread,pointerToRawData,1,4,[FP]
-    macroPrint "PointerToRawData",pointerToRawData
+    ;macroPrint "PointerToRawData",pointerToRawData
 
     invoke fread,pointerToRelocations,1,4,[FP]
-    macroPrint "PointerToRelocations",pointerToRelocations
+    ;macroPrint "PointerToRelocations",pointerToRelocations
 
     ;ПОЛУЧАЕМ RAW ТАБЛИЦЫ ИМПОРТА
     ;если virtualAddress<=rva<virtualAddress+virtualSize , то это наша секция
@@ -245,7 +249,6 @@ markerSectionLoop:
             sub eax,[virtualAddress]
             add eax,[pointerToRawData]
             mov [rawImportTable],eax
-            cinvoke printf,tpt,[rawImportTable]
             mov eax,[virtualAddress]
             mov [VAImportSection],eax
             mov eax,[pointerToRawData]
@@ -314,9 +317,15 @@ nextElement:
     .endif
     cinvoke printf,"            Entropy this section: "
     cinvoke printf,"%f",dword [entropySum],dword [entropySum+4]         ;ВЫВОДИМ ЭНТРОПИЮ СЕКЦИИ
+    fld [forCmpEntropy]
+    ;cinvoke printf,"%f",dword [forCmpEntropy],dword [forCmpEntropy+4]
+    fcomp                                                                 ;сравниваем st(0)(текущий элемент массива/sizeOfRawData) с 0
+    fstsw ax                                                            ;сохраняет текущее значение регистров SR в AX
+    sahf                                                                ;загружает флаги SF, ZF, AF, PF, CF из регистра ah (позволяет работаь как с обычным cmp)
+      jb entropyMore                                                   ;st(0)<0? -> nextElement
+m1:
     fldz                                                                ;0 В СТЕК
-    fstp [entropySum]                                                    ;0 В entropySum (ТАКИМ ОБРАЗОМ ОЧИЩАЕМ)
-
+    fstp [entropySum]                                                   ;0 В entropySum (ТАКИМ ОБРАЗОМ ОЧИЩАЕМ)
 ;ИЩЕМ ТОЧКУ ВХОДА
     mov eax, [addressEntPnt]
     .if   [virtualAddress] < eax                                        ;если виртуальынй адрес меньше адреса, на который указывается addressEntPnt
@@ -342,11 +351,9 @@ sizeRawDataZero:
     cinvoke printf," - na ety section ykazivaet addressOfEntryPoint"
     cinvoke puts,crlf
     cinvoke puts,crlf
-    cinvoke puts,crlf
+
 
     ;ТАБЛИЦА ИМПОРТА
-    cinvoke printf,tpt,[rawImportTable]
-    macroPrint "rawImportTable",rawImportTable
     cinvoke puts,crlf
 nextDll:
     cinvoke fseek,[FP],[rawImportTable],0                                           ;ставим метку на первый _IMAGE_IMPORT_DESCRIPTOR
@@ -376,14 +383,21 @@ readNameFunc:
     cinvoke puts,crlf
     add [buff4],4                                                                    ;добавляем 4 байт
     jmp nextRvaFunc                                                                  ;читаем след rva функции
+
 exitProg:
     invoke _getch
     invoke ExitProcess, 0
     invoke  exit, 0
 
+entropyMore:
+    cinvoke puts,crlf
+    cinvoke printf,"            [WARNING!] Entropy this section >6.7"
+    jmp m1
+
 notPe:
     cinvoke puts,crlf
     cinvoke printf,"not pe file"
+
 
     invoke _getch
     invoke  exit, 0
