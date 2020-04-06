@@ -1,6 +1,6 @@
 format PE console 5.0
 include 'win32ax.inc'
-include 'INCLUDE\MACRO\IF.INC'
+;include 'INCLUDE\MACRO\IF.INC'
 entry    start
 
 section '.data' data readable writeable
@@ -8,7 +8,7 @@ section '.data' data readable writeable
         buff          dd      ?              ;секция, на которую указывает addressOfEntryPoint
         FP            dd      ?
         mode          db      'rb',0
-        fName         db      'C:\Users\admin\Desktop\peAnalyzerSoft\peFIles\perparserUpx.exe',0
+        fName         db      'C:\Users\admin\Desktop\x64dbg 2018\release\x96dbg.exe',0
         tpt           db      '0x%0X ',0
         tpn           db      '%s',0
         buf           dd      ?
@@ -77,9 +77,14 @@ section '.data' data readable writeable
         buffEntropy           dq      ?
         tempEntropy           dq      ?
 
-        arrayBadGunc          db        "lsDebuggerPresent","GetThreadContext","ReadProcessMemory",0
+        ;подозрительынй ф-ии
+        buffFunc              db      256 dup(?)
+        buffFuncLength        dd      ?
+        func1                 db      "lsDebuggerPresent",0
+        func2                 db      "WriteProcessMemory",0
+        func3                 db      "WriteFile",0
 
-macro rwa [somethingRva]
+macro macroRwa [somethingRva]
 {
         ;rwa = rva - VAImportSection + importSectionPointerToRawData
         mov eax,[somethingRva]
@@ -94,6 +99,17 @@ macro macroPrint str,[perem]
         cinvoke printf,str
         cinvoke printf," - "
         cinvoke printf,tpt,[perem]
+}
+macro macroCmpFunc buffFuncName,badFunc
+{
+  ;cinvoke printf,buffFuncName
+  invoke lstrlen,buffFuncName
+  mov [buffFuncLength],eax
+  invoke lstrlen,badFunc
+  .if [buffFuncLength] = eax
+      cinvoke printf,buffFuncName
+  .endif
+
 }
 section '.text' code readable executable
 start:
@@ -361,7 +377,7 @@ nextDll:
     .if [buff2] = 0h
         jmp exitProg
     .endif
-    rwa buff2
+    macroRwa buff2
     pop [buff4]                                                                     ;rwa до начала Import Name Table
 nextRvaFunc:
     cinvoke fseek,[FP],[buff4],0                                                    ;ставим указатель на начало Import Name Table
@@ -370,19 +386,33 @@ nextRvaFunc:
         add [rawImportTable],20                                                     ;+20
         jmp nextDll
     .endif
-    rwa buff3
+   macroRwa buff3
     pop ebx
     add ebx,2
     cinvoke fseek,[FP],ebx,0                                                         ;метка на структуру с hint(2 байта )и имя функции
+    cld
+    mov edi,buffFunc
+    cld
 readNameFunc:
     cinvoke fread,buff5,1,1,[FP]                                                     ;читаем байт
-    cinvoke printf,"%c",[buff5]                                                      ;выводим его
+    mov eax, [buff5]
+    stosb
+    ;cinvoke printf,"%c",[buff5]                                                       ;выводим его
     .if [buff5]<> 100h                                                               ;если он != 0
+        inc dl
         jmp readNameFunc                                                             ;то читаем след элемент
     .endif
     cinvoke puts,crlf
+    macroCmpFunc buffFunc,func1
+    macroCmpFunc buffFunc,func2
+    macroCmpFunc buffFunc,func3
+
+
     add [buff4],4                                                                    ;добавляем 4 байт
     jmp nextRvaFunc                                                                  ;читаем след rva функции
+
+
+
 
 exitProg:
     invoke _getch
@@ -418,4 +448,5 @@ section '.idata' import data readable
     exit,'exit',\
     fseek,'fseek'
  import kernel,\
-        ExitProcess,'ExitProcess'
+        ExitProcess,'ExitProcess',\
+        lstrlen,'lstrlen'
