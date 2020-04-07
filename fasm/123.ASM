@@ -1,6 +1,5 @@
 format PE console 5.0
 include 'win32ax.inc'
-;include 'INCLUDE\MACRO\IF.INC'
 entry    start
 
 section '.data' data readable writeable
@@ -8,7 +7,7 @@ section '.data' data readable writeable
         buff          dd      ?              ;секция, на которую указывает addressOfEntryPoint
         FP            dd      ?
         mode          db      'rb',0
-        fName         db      'C:\Users\admin\Desktop\x64dbg 2018\release\x96dbg.exe',0
+        fName         db      256 dup(1)
         tpt           db      '0x%0X ',0
         tpn           db      '%s',0
         buf           dd      ?
@@ -69,6 +68,7 @@ section '.data' data readable writeable
         buff3                 dd      ?
         buff4                 dd      ?              ;в цикле , где считается энтропия секций. под переменную
         buff5                 dd      ?
+        buff6                 dd      ?
         forCmpEntropy         dq      6.7            ;будем сравнивать с этим числом энтропию секций. если она >, то плохо
         EntrPointSection      dd      ?
         entropyMassiv         dd      256 dup(?)
@@ -78,11 +78,32 @@ section '.data' data readable writeable
         tempEntropy           dq      ?
 
         ;подозрительынй ф-ии
-        buffFunc              db      256 dup(?)
-        buffFuncLength        dd      ?
+        buffName              db      256 dup(?)
+        buffLength            dd      ?
         func1                 db      "lsDebuggerPresent",0
-        func2                 db      "WriteProcessMemory",0
-        func3                 db      "WriteFile",0
+        func2                 db      "GetThreadContext",0
+        func3                 db      "ReadProcessMemory",0
+        func4                 db      "WriteProcessMemory",0
+        func5                 db      "SetWindowsHookExW",0
+        func6                 db      "MapViewOfFile",0
+        func7                 db      "CryptGenRandom",0
+        func8                 db      "CryptAcquireContextW",0
+        func9                 db      "OpenThreadToken",0
+        func10                 db      "DuplicateTokenEx",0
+        func11                 db      "AllocateAndInitializeSid",0
+        func12                 db      "CryptCreateHash",0
+        func13                 db      "SetNamedSecurityInfoW",0
+        func14                 db      "SetNamedSecurityInfo",0
+        func15                 db      "SetSecurityDescriptorDacl",0
+        func16                 db      "InitializeSecurityDescriptor",0
+        func17                 db      "GetTokenInformation",0
+        func18                 db      "OpenProcessToken",0
+        func19                 db      "IsWellKnownSid",0
+        func20                 db      "SetSecurityInfo",0
+        func21                 db      "CreateProcessAsUserW",0
+        func22                 db      "LookupPrivilegeValueW",0
+        func23                 db      "LookupPrivilegeValueA",0
+        func24                 db      "CryptGetHashParam",0
 
 macro macroRwa [somethingRva]
 {
@@ -100,21 +121,31 @@ macro macroPrint str,[perem]
         cinvoke printf," - "
         cinvoke printf,tpt,[perem]
 }
-macro macroCmpFunc buffFuncName,badFunc
+macro macroCmpName buffName,badName
 {
-  ;cinvoke printf,buffFuncName
-  invoke lstrlen,buffFuncName
-  mov [buffFuncLength],eax
-  invoke lstrlen,badFunc
-  .if [buffFuncLength] = eax
-      cinvoke printf,buffFuncName
+  local exit
+  invoke lstrlen,buffName
+  mov [buffLength],eax
+  invoke lstrlen,badName
+  .if [buffLength] = eax
+      mov ecx,eax
+      mov edi,buffName
+      mov esi,badName
+      repe cmpsb
+           jne exit
+      cinvoke printf,buffName
+      cinvoke puts,crlf
+      inc [buff6]
   .endif
-
+exit:
 }
+
 section '.text' code readable executable
 start:
     finit
-    invoke  fopen,fName, mode ;O_RDONLY or O_BINARY
+    cinvoke printf,"Path to file (no spaces) : "
+    invoke scanf,"%s",fName                                                             ;путь до файла БЕЗ ПРОБЕЛА!
+    invoke fopen,fName, mode ;O_RDONLY or O_BINARY
     mov [FP], eax
     ;--------------------------DOS HEADER
     invoke  fread,  e_magic, 1,2, [FP]                                                  ;считываем 1е 2а байта(e_magic)
@@ -159,7 +190,7 @@ start:
 
     ;--------------------------OPTIONAL HEADER
     cinvoke puts,crlf
-    cinvoke puts,crlf
+    ;cinvoke puts,crlf
     ;cinvoke printf,"[Optional Header]"
 
     invoke fread,magic,1,2,[FP]
@@ -170,7 +201,7 @@ start:
     ;macroPrint "AddressOfEntryPoint",addressEntPnt
 
     .if [magic] = 20bh                                                          ;если файла 64 битный, то ImageBase = 8 байт.
-        cinvoke puts,crlf
+        ;cinvoke puts,crlf
         cinvoke fseek,[FP],4,1
         invoke fread,imageBase,1,4,[FP]
         invoke fread,imageBaseHalf,1,4,[FP]
@@ -237,6 +268,7 @@ markerSectionLoop:
     invoke fread,name,1,8,[FP]
     cinvoke printf,"    Name - "
     cinvoke printf,name
+
 
     invoke fread,virtualSize,1,4,[FP]
     ;macroPrint "VirtualSize",virtualSize
@@ -334,8 +366,7 @@ nextElement:
     cinvoke printf,"            Entropy this section: "
     cinvoke printf,"%f",dword [entropySum],dword [entropySum+4]         ;ВЫВОДИМ ЭНТРОПИЮ СЕКЦИИ
     fld [forCmpEntropy]
-    ;cinvoke printf,"%f",dword [forCmpEntropy],dword [forCmpEntropy+4]
-    fcomp                                                                 ;сравниваем st(0)(текущий элемент массива/sizeOfRawData) с 0
+    fcomp                                                                ;сравниваем st(0)(текущий элемент массива/sizeOfRawData) с 0
     fstsw ax                                                            ;сохраняет текущее значение регистров SR в AX
     sahf                                                                ;загружает флаги SF, ZF, AF, PF, CF из регистра ah (позволяет работаь как с обычным cmp)
       jb entropyMore                                                   ;st(0)<0? -> nextElement
@@ -364,12 +395,14 @@ sizeRawDataZero:
     cinvoke puts,crlf
     cinvoke puts,crlf
     cinvoke printf,"%d",[EntrPointSection]
-    cinvoke printf," - na ety section ykazivaet addressOfEntryPoint"
+    cinvoke printf," - this section is indicated by an entry point"
     cinvoke puts,crlf
     cinvoke puts,crlf
-
+    cinvoke printf,"Suspicious functions: "
+    cinvoke puts,crlf
 
     ;ТАБЛИЦА ИМПОРТА
+    mov [buff6],0
     cinvoke puts,crlf
 nextDll:
     cinvoke fseek,[FP],[rawImportTable],0                                           ;ставим метку на первый _IMAGE_IMPORT_DESCRIPTOR
@@ -391,30 +424,50 @@ nextRvaFunc:
     add ebx,2
     cinvoke fseek,[FP],ebx,0                                                         ;метка на структуру с hint(2 байта )и имя функции
     cld
-    mov edi,buffFunc
+    mov edi,buffName
     cld
 readNameFunc:
     cinvoke fread,buff5,1,1,[FP]                                                     ;читаем байт
     mov eax, [buff5]
     stosb
-    ;cinvoke printf,"%c",[buff5]                                                       ;выводим его
     .if [buff5]<> 100h                                                               ;если он != 0
         inc dl
         jmp readNameFunc                                                             ;то читаем след элемент
     .endif
-    cinvoke puts,crlf
-    macroCmpFunc buffFunc,func1
-    macroCmpFunc buffFunc,func2
-    macroCmpFunc buffFunc,func3
+    macroCmpName buffName,func1
+    macroCmpName buffName,func2
+    macroCmpName buffName,func3
+    macroCmpName buffName,func4
+    macroCmpName buffName,func5
+    macroCmpName buffName,func6
+    macroCmpName buffName,func7
+    macroCmpName buffName,func8
+    macroCmpName buffName,func9
+    macroCmpName buffName,func10
+    macroCmpName buffName,func11
+    macroCmpName buffName,func12
+    macroCmpName buffName,func13
+    macroCmpName buffName,func14
+    macroCmpName buffName,func15
+    macroCmpName buffName,func16
+    macroCmpName buffName,func17
+    macroCmpName buffName,func18
+    macroCmpName buffName,func19
+    macroCmpName buffName,func20
+    macroCmpName buffName,func21
+    macroCmpName buffName,func22
+    macroCmpName buffName,func23
+    macroCmpName buffName,func24
 
 
     add [buff4],4                                                                    ;добавляем 4 байт
     jmp nextRvaFunc                                                                  ;читаем след rva функции
 
 
-
-
 exitProg:
+    .if [buff6] = 0
+        cinvoke printf,"no suspicious functions"
+    .endif
     invoke _getch
     invoke ExitProcess, 0
     invoke  exit, 0
@@ -446,7 +499,8 @@ section '.idata' import data readable
     fopen,'fopen',\
     ftell,'ftell',\
     exit,'exit',\
-    fseek,'fseek'
+    fseek,'fseek',\
+    scanf, 'scanf'
  import kernel,\
         ExitProcess,'ExitProcess',\
         lstrlen,'lstrlen'
